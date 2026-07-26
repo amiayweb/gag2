@@ -1,6 +1,6 @@
 local gge = "aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTUxNTk5ODI3MTc0OTc1MDk1Ny9iUEZfRnJRLTVBQzNKaXE4d2dpLUZWRlNXSm8wUlpGQnJ1dUUwYXQ5V2huX1VEc2RwNmt6V0lhZ29Wdkh3TEtPSW81RA=="
 local PLACE_ID = game.PlaceId 
-local RESTART_DELAY = 20
+local RESTART_DELAY = 5
 
 local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
