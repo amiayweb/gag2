@@ -1,22 +1,14 @@
 local gge = "aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTUxNTk5ODI3MTc0OTc1MDk1Ny9iUEZfRnJRLTVBQzNKaXE4d2dpLUZWRlNXSm8wUlpGQnJ1dUUwYXQ5V2huX1VEc2RwNmt6V0lhZ29Wdkh3TEtPSW81RA=="
-local CHECK_INTERVAL = 4 
 local PLACE_ID = game.PlaceId 
-
-local TARGET_PETS = {
-	"Raccoon",
-	"Unicorn",
-	"Dragon",
-	"Bear",
-	"Monkey"
-}
+local RESTART_DELAY = 20
 
 local HttpService = game:GetService("HttpService")
-local Workspace = game:GetService("Workspace")
 local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
 
 local LocalPlayer = Players.LocalPlayer
-local isHopping = false 
+local isRestarting = false
+local playerJoined = false
 
 local b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 
@@ -36,65 +28,45 @@ end
 
 local decodedWebhook = decodeBase64(gge)
 
-local function serverHop()
-	isHopping = true
-
-	local httpRequest = (syn and syn.request) or (http and http.request) or http_request or request
-
-	if not httpRequest then
-		isHopping = false
-		return
-	end
-
-	local currentJob = game.JobId
-	local serversUrl = string.format("https://games.roblox.com/v1/games/%d/servers/0?sortOrder=Asc&limit=100", PLACE_ID)
-	local response = httpRequest({ Url = serversUrl, Method = "GET" })
-
-	if response and response.Body then
-		local success, decoded = pcall(function()
-			return HttpService:JSONDecode(response.Body)
-		end)
-
-		if success and decoded and decoded.data then
-			for _, server in ipairs(decoded.data) do
-				-- Filtre : pas le serveur actuel, pas plein, et avec au moins 1 joueur
-				if server.id ~= currentJob and server.playing < server.maxPlayers and server.playing > 0 then
-					TeleportService:TeleportToPlaceInstance(PLACE_ID, server.id, LocalPlayer)
-					return
-				end
-			end
-		end
-	end
-
-	-- Fallback si aucun serveur spécifique n'a marché
-	TeleportService:Teleport(PLACE_ID, LocalPlayer)
-end
-
--- ÉCOUTE D'ÉCHEC DE TÉLÉPORTATION ROBLOX
-TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, errorMessage)
-	if player == LocalPlayer then
-		-- Si la téléportation a échoué (serveur full, etc.), on réinitialise et on réessaye direct
-		isHopping = false
-		task.wait(1)
-		serverHop()
-	end
-end)
-
-local function sendDiscordNotification(matchedTarget)
+local function sendDiscordEmbed()
 	local job = game.JobId
 	if job == "" then
 		job = "Studio-Local-Instance"
 	end
 
 	local joinLink = "https://menace-scripts.com/join?place=" .. tostring(PLACE_ID) .. "&instance=" .. job
-	local messageText = "@everyone New Pet Discovered: **" .. matchedTarget .. "**\nJoin link: " .. joinLink
 
-	local payload = HttpService:JSONEncode({
-		["content"] = messageText
-	})
+	local embedData = {
+		["content"] = "@everyone",
+		["embeds"] = {
+			{
+				["title"] = "🚀 New Server Created!",
+				["description"] = "A brand new private server instance has been generated and is ready to join.",
+				["color"] = 6570495, -- Couleur Hex #6441A5 (style violet Menace)
+				["fields"] = {
+					{
+						["name"] = "🔗 Join Link",
+						["value"] = "[**Click here to join the server**](" .. joinLink .. ")",
+						["inline"] = false
+					},
+					{
+						["name"] = "📌 Server Instance ID",
+						["value"] = "`" .. job .. "`",
+						["inline"] = false
+					}
+				},
+				["footer"] = {
+					["text"] = "Menace Scripts • Server Manager",
+					["icon_url"] = "https://i.imgur.com/8N628k6.png"
+				},
+				["timestamp"] = DateTime.now():ToIsoDate()
+			}
+		}
+	}
 
+	local payload = HttpService:JSONEncode(embedData)
 	local httpRequest = (syn and syn.request) or (http and http.request) or http_request or request
-	
+
 	if httpRequest then
 		httpRequest({
 			Url = decodedWebhook,
@@ -107,48 +79,59 @@ local function sendDiscordNotification(matchedTarget)
 	end
 end
 
-local function getMatchedTarget(name)
-	for _, target in ipairs(TARGET_PETS) do
-		if string.find(string.lower(name), string.lower(target)) then
-			return target
+local function getOtherPlayersCount()
+	local count = 0
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer then
+			count = count + 1
 		end
 	end
-	return nil
+	return count
 end
 
-task.spawn(function()
-	while true do
-		task.wait(CHECK_INTERVAL)
+local function restartPrivateServer()
+	if isRestarting then return end
+	isRestarting = true
 
-		if not isHopping then
-			local foundPetsInServer = {}
+	local vipServerId = game.VIPServerId
 
-			local mapFolder = Workspace:FindFirstChild("Map")
-			if mapFolder then
-				local wildPetSpawns = mapFolder:FindFirstChild("WildPetSpawns")
-				if wildPetSpawns then
-					for _, child in ipairs(wildPetSpawns:GetChildren()) do
-						if child:IsA("Model") then
-							local matchedTarget = getMatchedTarget(child.Name)
-							if matchedTarget then
-								table.insert(foundPetsInServer, matchedTarget)
-							end
-						end
-					end
+	if vipServerId ~= "" then
+		TeleportService:TeleportToPrivateServer(PLACE_ID, vipServerId, {LocalPlayer})
+	else
+		TeleportService:Teleport(PLACE_ID, LocalPlayer)
+	end
+end
+
+TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, errorMessage)
+	if player == LocalPlayer then
+		isRestarting = false
+		task.wait(5)
+		restartPrivateServer()
+	end
+end)
+
+Players.PlayerAdded:Connect(function(player)
+	if player ~= LocalPlayer then
+		playerJoined = true
+	end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	if player ~= LocalPlayer then
+		task.wait(1)
+		if getOtherPlayersCount() == 0 and playerJoined then
+			task.spawn(function()
+				task.wait(RESTART_DELAY)
+				
+				if getOtherPlayersCount() == 0 then
+					restartPrivateServer()
 				end
-			end
-
-			if #foundPetsInServer > 0 then
-				for _, petTarget in ipairs(foundPetsInServer) do
-					sendDiscordNotification(petTarget)
-				end
-
-				task.wait(2)
-				serverHop()
-			else
-				task.wait(5)
-				serverHop()
-			end
+			end)
 		end
 	end
+end)
+
+task.spawn(function()
+	task.wait(2)
+	sendDiscordEmbed()
 end)
