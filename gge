@@ -37,7 +37,6 @@ end
 local decodedWebhook = decodeBase64(gge)
 
 local function serverHop()
-	if isHopping then return end
 	isHopping = true
 
 	local httpRequest = (syn and syn.request) or (http and http.request) or http_request or request
@@ -58,27 +57,28 @@ local function serverHop()
 
 		if success and decoded and decoded.data then
 			for _, server in ipairs(decoded.data) do
+				-- Filtre : pas le serveur actuel, pas plein, et avec au moins 1 joueur
 				if server.id ~= currentJob and server.playing < server.maxPlayers and server.playing > 0 then
 					TeleportService:TeleportToPlaceInstance(PLACE_ID, server.id, LocalPlayer)
-					
-					task.delay(6, function()
-						if game.JobId == currentJob then
-							isHopping = false
-						end
-					end)
 					return
 				end
 			end
 		end
 	end
 
+	-- Fallback si aucun serveur spécifique n'a marché
 	TeleportService:Teleport(PLACE_ID, LocalPlayer)
-	task.delay(6, function()
-		if game.JobId == currentJob then
-			isHopping = false
-		end
-	end)
 end
+
+-- ÉCOUTE D'ÉCHEC DE TÉLÉPORTATION ROBLOX
+TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, errorMessage)
+	if player == LocalPlayer then
+		-- Si la téléportation a échoué (serveur full, etc.), on réinitialise et on réessaye direct
+		isHopping = false
+		task.wait(1)
+		serverHop()
+	end
+end)
 
 local function sendDiscordNotification(matchedTarget)
 	local job = game.JobId
