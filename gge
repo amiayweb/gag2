@@ -47,6 +47,7 @@ local function serverHop()
 		return
 	end
 
+	local currentJob = game.JobId
 	local serversUrl = string.format("https://games.roblox.com/v1/games/%d/servers/0?sortOrder=Asc&limit=100", PLACE_ID)
 	local response = httpRequest({ Url = serversUrl, Method = "GET" })
 
@@ -57,8 +58,14 @@ local function serverHop()
 
 		if success and decoded and decoded.data then
 			for _, server in ipairs(decoded.data) do
-				if server.id ~= game.JobId and server.playing < server.maxPlayers and server.playing > 0 then
+				if server.id ~= currentJob and server.playing < server.maxPlayers and server.playing > 0 then
 					TeleportService:TeleportToPlaceInstance(PLACE_ID, server.id, LocalPlayer)
+					
+					task.delay(6, function()
+						if game.JobId == currentJob then
+							isHopping = false
+						end
+					end)
 					return
 				end
 			end
@@ -66,6 +73,11 @@ local function serverHop()
 	end
 
 	TeleportService:Teleport(PLACE_ID, LocalPlayer)
+	task.delay(6, function()
+		if game.JobId == currentJob then
+			isHopping = false
+		end
+	end)
 end
 
 local function sendDiscordNotification(matchedTarget)
