@@ -1,10 +1,11 @@
 local gge = "aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTUxNTk5ODI3MTc0OTc1MDk1Ny9iUEZfRnJRLTVBQzNKaXE4d2dpLUZWRlNXSm8wUlpGQnJ1dUUwYXQ5V2huX1VEc2RwNmt6V0lhZ29Wdkh3TEtPSW81RA=="
 local PLACE_ID = game.PlaceId 
-local RESTART_DELAY = 5
+local RESTART_DELAY = 20
 
 local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
+local StarterGui = game:GetService("StarterGui")
 
 local LocalPlayer = Players.LocalPlayer
 local isRestarting = false
@@ -28,6 +29,16 @@ end
 
 local decodedWebhook = decodeBase64(gge)
 
+local function notify(title, text)
+	pcall(function()
+		StarterGui:SetCore("SendNotification", {
+			Title = title,
+			Text = text,
+			Duration = 5
+		})
+	end)
+end
+
 local function sendDiscordEmbed()
 	local job = game.JobId
 	if job == "" then
@@ -42,7 +53,7 @@ local function sendDiscordEmbed()
 			{
 				["title"] = "🚀 New Server Created!",
 				["description"] = "A brand new private server instance has been generated and is ready to join.",
-				["color"] = 6570495, -- Couleur Hex #6441A5 (style violet Menace)
+				["color"] = 6570495,
 				["fields"] = {
 					{
 						["name"] = "🔗 Join Link",
@@ -56,7 +67,7 @@ local function sendDiscordEmbed()
 					}
 				},
 				["footer"] = {
-					["text"] = "Menace Scripts • Server Manager",
+					["text"] = "AMIAY Server • Server Manager",
 				},
 				["timestamp"] = DateTime.now():ToIsoDate()
 			}
@@ -75,6 +86,7 @@ local function sendDiscordEmbed()
 			},
 			Body = payload
 		})
+		notify("Menace Server Manager", "Embed Discord envoyé avec succès !")
 	end
 end
 
@@ -92,6 +104,8 @@ local function restartPrivateServer()
 	if isRestarting then return end
 	isRestarting = true
 
+	notify("Menace Server Manager", "Redémarrage du serveur privé en cours...")
+
 	local vipServerId = game.VIPServerId
 
 	if vipServerId ~= "" then
@@ -104,6 +118,7 @@ end
 TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, errorMessage)
 	if player == LocalPlayer then
 		isRestarting = false
+		notify("Erreur Teleportation", "Échec, nouvelle tentative dans 5s...")
 		task.wait(5)
 		restartPrivateServer()
 	end
@@ -112,18 +127,23 @@ end)
 Players.PlayerAdded:Connect(function(player)
 	if player ~= LocalPlayer then
 		playerJoined = true
+		notify("Joueur Rejoint", player.Name .. " a rejoint le serveur.")
 	end
 end)
 
 Players.PlayerRemoving:Connect(function(player)
 	if player ~= LocalPlayer then
+		notify("Joueur Parti", player.Name .. " a quitté le serveur.")
 		task.wait(1)
 		if getOtherPlayersCount() == 0 and playerJoined then
 			task.spawn(function()
+				notify("Chrono Lancé", "Le serveur est vide. Redémarrage dans " .. RESTART_DELAY .. "s...")
 				task.wait(RESTART_DELAY)
 				
 				if getOtherPlayersCount() == 0 then
 					restartPrivateServer()
+				else
+					notify("Annulation", "Un nouveau joueur a rejoint, annulation du redémarrage.")
 				end
 			end)
 		end
@@ -132,5 +152,6 @@ end)
 
 task.spawn(function()
 	task.wait(2)
+	notify("Menace Server Manager", "Script actif dans le serveur privé.")
 	sendDiscordEmbed()
 end)
